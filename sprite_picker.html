@@ -1,0 +1,263 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>sprite picker</title>
+    <style>
+        html, body{
+            margin: 0;
+            padding: 0;
+        }
+
+        #dropArea{
+          width: 300px;
+          height: 300px;
+          border: 1px dashed #ccc;
+          font-size: 24px;
+          line-height: 300px;
+          text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas" width="600" height="600"></canvas>
+    <div>
+      <input type="file" id="fileInput">
+    </div>
+    <div id="dropArea">将图片拖拽到此处</div>
+    <div id="ouput"></div>
+    <canvas id="piece"></canvas>
+    <script>
+        var canvas = document.getElementById('canvas')
+        var ctx = canvas.getContext('2d')
+        var image = new Image()
+        var width
+        var height
+        var drawImage = function() {
+            ctx.drawImage(image, 0, 0, width, height, 0, 0, width, height)
+        }
+        var clear = function() {
+            ctx.clearRect(0, 0, width, height)
+        }
+
+        function loadImage(src) {
+          image.onload = () => {
+            console.log('image', image.width, image.height)
+            width = image.width
+            height = image.height;
+            canvas.setAttribute('width', width)
+            canvas.setAttribute('height', height)
+            drawImage();
+            // const startTime = Date.now()
+            // for (var w = 0; w < width; w++) {
+            //     for (var h = 0; h < height; h++) {
+            //         pointMap[getPointStr(w, h)] = isPointTransparent(ctx, w, h)
+            //     }
+            // }
+            // console.log('excu time', Date.now() - startTime);
+            // console.log('pointMap', pointMap)
+            
+          }
+          image.src = src
+        }
+
+        loadImage('./src/assets/images/contra.png');
+
+        function getImage (file) {
+          if (file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => {
+            loadImage(reader.result);
+          };
+        }
+        }
+
+        const fileInput = document.getElementById('fileInput')
+        fileInput.addEventListener('change', function(e) {
+          const file = fileInput.files[0]
+          getImage(file)
+        })
+
+        // 阻止默认的拖拽行为
+        document.getElementById('dropArea').addEventListener('dragover', e => {
+          e.preventDefault();
+        });
+
+        document.getElementById('dropArea').addEventListener('drop', e => {
+          e.preventDefault();
+          const file = e.dataTransfer.files[0];
+          getImage(file);
+        })
+        
+
+
+        var pointMap = {}
+        function getPointStr(x, y) {
+            return `${x}, ${y}`
+        }
+
+        function isTransparent([r, g, b, a]) {
+            return !(r || g || b || a)
+        }
+
+        function isPointTransparent(x, y){
+            const key = getPointStr(x, y);
+            if (pointMap[key]) {
+                return pointMap[key]
+            }
+            const result = isTransparent(getPointerData(x, y));
+            pointMap[key] = result;
+            return result;
+        }
+
+        function getPointerData (x, y) {
+            const pixel = ctx.getImageData(x, y, 1, 1)
+            return pixel.data
+        }
+
+        function calculateDistance(x, y, x1, y1, x2, y2) {
+          const A = x - x1;
+          const B = y - y1;
+          const C = x2 - x1;
+          const D = y2 - y1;
+
+          const dotProduct = A * C + B * D;
+          const lengthSquared = C * C + D * D;
+          let param = -1;
+
+          if (lengthSquared !== 0) {
+            param = dotProduct / lengthSquared;
+          }
+
+          let closestX, closestY;
+
+          if (param < 0) {
+            closestX = x1;
+            closestY = y1;
+          } else if (param > 1) {
+            closestX = x2;
+            closestY = y2;
+          } else {
+            closestX = x1 + param * C;
+            closestY = y1 + param * D;
+          }
+
+          const distanceX = x - closestX;
+          const distanceY = y - closestY;
+          const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY);
+
+          return distance;
+        }
+
+        function getRect(x, y) {
+            let x1 = x
+            let x2 = x
+            let y1 = y
+            let y2 = y
+            let pos = isReactTransparent(x1, y1, x2, y2)
+            while(pos) {
+                if (pos === 'top') {
+                    y1--
+                } else if (pos === 'right') {
+                    x2++
+                } else if (pos === 'bottom') {
+                    y2++
+                } else if (pos === 'left') {
+                    x1--
+                } 
+                pos = isReactTransparent(x1, y1, x2, y2)
+            }
+            return [x1, y1, x2, y2].map(item => Math.max(0, item))
+        }
+
+        function isReactTransparent(x1, y1, x2, y2) {
+            for (let i = x1; i <= x2; i++) {
+                if (!isPointTransparent(i, y1)) {
+                    return 'top'
+                }
+            }
+            for (let i = y1; i <= y2; i++) {
+                if (!isPointTransparent(x2, i)) {
+                    return 'right'
+                }
+            }
+            for (let i = x1; i <= x2; i++) {
+                if (!isPointTransparent(i, y2)) {
+                    return 'bottom'
+                }
+            }
+            for (let i = y1; i <= y2; i++) {
+                if (!isPointTransparent(x1, i)) {
+                    return 'left'
+                }
+            } 
+            return
+        }
+
+        function drawLine(x1, y1, x2, y2) {
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+        }
+
+        const pieceCanvas = document.getElementById('piece');
+        const pieceCtx = pieceCanvas.getContext('2d');
+        let lastLines = []
+
+        window.addEventListener('click', function(e) {
+            clear()
+            drawImage()
+            // ctx.save();
+            const rect = canvas.getBoundingClientRect()
+            const width = rect.width
+            const height = rect.height
+            const x = event.clientX - rect.left
+            const y = event.clientY - rect.top
+            console.log('点击坐标', x, y)
+            // return;
+            const pixel = ctx.getImageData(x, y, 1, 1)
+            // const distance = lastLines.map(item => calculateDistance(e.clientX, e.clientY, ...item))
+            // console.log('distance', distance)
+            // if (distance.filter(item => item < 10).length) {
+
+            //   return;
+            // }
+            const data = pixel.data;
+            if (isTransparent(data)) {
+                return console.error('click postion should not be transparent', x, y)
+            }
+
+            const res = getRect(x, y)
+
+            const [x1, y1, x2, y2] = res;
+
+            const pieceWidth = x2 - x1
+            const pieceHeight = y2 - y1
+            const canvasArgs = [x1, y1, x2 - x1, y2 - y1, 0, 0, x2 - x1, y2 - y1]
+            const text = `左上角顶点坐标(${x1}, ${y1}), 宽：${pieceWidth}, 高：${pieceHeight};
+              canvas坐标 [${canvasArgs.join(', ')}];`
+            document.getElementById('ouput').innerText = text;
+            pieceCtx.clearRect(0, 0, pieceCanvas.width, pieceCanvas.height)
+            pieceCanvas.width = pieceWidth
+            pieceCanvas.height = pieceHeight
+            pieceCtx.drawImage(image, ...canvasArgs)
+
+            ctx.lineWidth = 1
+            lastLines = [
+              [0, y1 + 0.5, width, y1 + 0.5],
+              [x1 + 0.5, 0, x1 + 0.5, height],
+              [0, y2 + 0.5, width, y2 + 0.5],
+              [x2 + 0.5, 0, x2 + 0.5, height],
+            ]
+            lastLines.forEach(item => {
+              drawLine(...item)
+            })
+        })
+    </script>
+</body>
+</html>
